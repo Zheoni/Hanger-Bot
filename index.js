@@ -8,60 +8,60 @@ const prefix = "hang"
 
 const figure = [`
  +---+
- |   |      w
+ |   |      wordHere
      |
-     |      l
-     |      m
+     |      numerOfLives
+     |      missC
      |
- =========
+ =========  gameStatus
 `, `
  +---+
- |   |      w
+ |   |      wordHere
  O   |
-     |      l
-     |      m
+     |      numerOfLives
+     |      missC
      |
- =========
+ =========  gameStatus
 `, `
  +---+
- |   |      w
+ |   |      wordHere
  O   |
- |   |      l
-     |      m
+ |   |      numerOfLives
+     |      missC
      |
- =========
+ =========  gameStatus
 `, `
  +---+
- |   |      w
+ |   |      wordHere
  O   |
-/|   |      l
-     |      m
+/|   |      numerOfLives
+     |      missC
      |
- =========
+ =========  gameStatus
 `, `
  +---+
- |   |      w
+ |   |      wordHere
  O   |
-/|\\  |      l
-     |      m
+/|\\  |      numerOfLives
+     |      missC
      |
- =========
+ =========  gameStatus
 `, `
  +---+
- |   |      w
+ |   |      wordHere
  O   |
-/|\\  |      l
-/    |      m
+/|\\  |      numerOfLives
+/    |      missC
      |
- =========
+ =========  gameStatus
 `, `
  +---+
- |   |      w
+ |   |      wordHere
  O   |
-/|\\  |      l
-/ \\  |      m
+/|\\  |      numerOfLives
+/ \\  |      missC
      |
- =========
+ =========  gameStatus
 `];
 
 
@@ -69,11 +69,10 @@ const helpEmbed = new Discord.RichEmbed();
 
 const runningGames = new Set();
 
-function gatherPlayers(channel) {
+function gatherPlayersFromMessage(channel) {
     return new Promise((resolve, reject) => {
         let players = [];
-        const filter = (msg) => (msg.content.toLowerCase().includes("join") && !msg.author.bot
-            && !players.find(p => p.id == msg.author.id));
+        const filter = (msg) => (msg.content.toLowerCase().includes("join") && !msg.author.bot);
         const collector = channel.createMessageCollector(filter, { time: 10000 });
         collector.on('collect', msg => {
             players.push(msg.author);
@@ -83,6 +82,44 @@ function gatherPlayers(channel) {
             resolve(players);
         });
     });
+}
+
+async function gatherPlayersFromReaction(message, emoji) {
+
+    await message.react(emoji);
+
+    return new Promise(async (resolve, reject) => {
+        let players = [];
+        const filter = (r) => (r.emoji.name == emoji);
+        //const filter = (r) => { return true; };
+        await message.awaitReactions(filter, { time: 10000 })
+            .then(collected => {
+                collected.first().users.forEach((user) => {
+                    if (!user.bot) {
+                        players.push(user);
+                    }
+                });
+            })
+            .catch(err => reject(err));
+
+        resolve(players);
+    });
+}
+
+async function gatherPlayers(channel) {
+    const msg = await channel.send("Write \"join\" or react with 📒 to participate in this game! You have 10 seconds.");
+    let p1 = gatherPlayersFromMessage(channel);
+    let p2 = gatherPlayersFromReaction(msg, '📒');
+    let aPlayers = await Promise.all([p1, p2]);
+    msg.delete();
+    let players = [];
+    // join both arrays of players into one of unique players.
+    aPlayers.forEach(ps => ps.forEach(p => {
+        if (!players.find(pOther => pOther.id == p.id)) {
+            players.push(p);
+        }
+    }));
+    return players;
 }
 
 async function getNextMessage(channel, maxTime) {
@@ -118,6 +155,7 @@ async function getWordFromPlayers(players, channel) {
             if (msg.match(/^[A-Za-zÀ-ú]{3,}$/)) {
                 word = msg.toLowerCase();
                 finish = true;
+                dm.send("Nice word! Going back to the server.");
             } else {
                 await dm.send("Thats not a valid word. No spaces, at least 3 characters.");
                 ++tries;
@@ -136,7 +174,7 @@ async function getWordFromPlayers(players, channel) {
     return { word: word, selector: chosenOne }
 }
 
-async function showProgress(channel, game, gameMessage) {
+async function showProgress(channel, game, gameMessage, gameOver) {
     const figureStep = figure[6 - game.lives];
     let progress = game.progress;
     let lives = "";
@@ -148,25 +186,37 @@ async function showProgress(channel, game, gameMessage) {
         }
     }
     let misses = "Misses: ";
-    for (let i = 0; i < game.misses.length; ++i) {
+    for (let i = 0; i < game.misses.length; ++i) {
         misses += (game.misses[i] + " ");
     }
 
-    const screen = figureStep.replace("w", progress)
-        .replace("l", lives)
-        .replace("m", misses);
-    
-    if (gameMessage) {
-        await gameMessage.edit(screen, { code: true });
+    let screen = figureStep.replace(/wordHere/, progress)
+        .replace(/numerOfLives/, lives)
+        .replace(/missC/, misses);
+
+    const embed = new Discord.RichEmbed();
+    if (gameOver) {
+        if (game.status === "won") {
+            embed.setColor("#00CC00");
+        } else {
+            embed.setColor("#E50000");
+        }
+        screen = screen.replace(/gameStatus/, "Game over");
     } else {
-        return await channel.send(screen, { code: true });
+        screen = screen.replace(/gameStatus/, " ");
+        embed.setColor("#FFD700");
+    }
+    embed.setDescription("```\n" + screen + "```");
+
+    if (gameMessage) {
+        await gameMessage.edit({ embed: embed });
+    } else {
+        return await channel.send({ embed: embed });
     }
 }
 
 async function startGame(channel, gameType) {
-    await channel.send("Write \"join\" to participate in this game! You have 10 seconds.");
     const players = await gatherPlayers(channel);
-    await channel.send("Aaand STOP! " + players.length + " users have joined the game.");
     if (players.length == 0) {
         channel.send("Maybe in another moment... no one joined the game");
         return;
@@ -184,7 +234,7 @@ async function startGame(channel, gameType) {
             word = randomWord();
             break;
         case "custom":
-            await channel.send("Selecting a player to choose the word. Waiting for one of you to respond. Check your DMs!!");
+            await channel.send(players.length + " players have joined. Selecting a player to choose the word. Waiting for one of you to respond. Check your DMs!!");
             let userSelection = await getWordFromPlayers(players, channel);
             if (userSelection) {
                 word = userSelection.word;
@@ -201,13 +251,9 @@ async function startGame(channel, gameType) {
 }
 
 async function runGame(channel, game, players) {
-    await channel.send("All ready, starting the game!");
     const gameMessage = await showProgress(channel, game);
     const filter = ((m) =>
-        players.find((p) => (p.id == m.author.id))
-        // const b = m.content.match(/^[A-Za-zÀ-ú]{1}$/);
-        // return (a && b && b.length == 1);
-    );
+        players.find((p) => (p.id == m.author.id)));
 
     const collector = channel.createMessageCollector(filter, { time: 900000 }); // max of 15 minutes per game
 
@@ -225,13 +271,17 @@ async function runGame(channel, game, players) {
                 return;
             }
             await showProgress(channel, game, gameMessage);
-            if (game.status !== "in progress" || players.length < 1) {
+
+            if (game.status !== "in progress") {
                 collector.stop();
+            } else if (players.length < 1) {
+                collector.stop();
+                game.status = "lost";
             }
         });
         collector.on('end', async (collected) => {
-            await channel.send("Game has ended.");
-            resolve("game finished");
+            await showProgress(channel, game, gameMessage, true);
+            resolve();
         });
     });
 }
@@ -291,7 +341,7 @@ client.on('message', async (msg) => {
                 }
                 break;
             case "help":
-                msg.channel.sendEmbed(helpEmbed);
+                msg.channel.send({ embed: helpEmbed });
                 break;
         }
     }
@@ -299,7 +349,6 @@ client.on('message', async (msg) => {
 
 client.on('ready', () => {
     client.user.setActivity(prefix + " help");
-
 });
 
 client.on('error', (err) => console.error(err));
