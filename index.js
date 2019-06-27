@@ -6,12 +6,74 @@ const hangman = require("./hangman.js");
 const client = new Discord.Client();
 const prefix = "hang"
 
+const figure = [`
+ +---+
+ |   |      w
+     |
+     |      l
+     |      m
+     |
+ =========
+`, `
+ +---+
+ |   |      w
+ O   |
+     |      l
+     |      m
+     |
+ =========
+`, `
+ +---+
+ |   |      w
+ O   |
+ |   |      l
+     |      m
+     |
+ =========
+`, `
+ +---+
+ |   |      w
+ O   |
+/|   |      l
+     |      m
+     |
+ =========
+`, `
+ +---+
+ |   |      w
+ O   |
+/|\\  |      l
+     |      m
+     |
+ =========
+`, `
+ +---+
+ |   |      w
+ O   |
+/|\\  |      l
+/    |      m
+     |
+ =========
+`, `
+ +---+
+ |   |      w
+ O   |
+/|\\  |      l
+/ \\  |      m
+     |
+ =========
+`];
+
+
+const helpEmbed = new Discord.RichEmbed();
+
 const runningGames = new Set();
 
 function gatherPlayers(channel) {
     return new Promise((resolve, reject) => {
         let players = [];
-        const filter = (msg) => (msg.content.toLowerCase().includes("join") && !msg.author.bot);
+        const filter = (msg) => (msg.content.toLowerCase().includes("join") && !msg.author.bot
+            && !players.find(p => p.id == msg.author.id));
         const collector = channel.createMessageCollector(filter, { time: 10000 });
         collector.on('collect', msg => {
             players.push(msg.author);
@@ -75,10 +137,29 @@ async function getWordFromPlayers(players, channel) {
 }
 
 async function showProgress(channel, game, gameMessage) {
+    const figureStep = figure[6 - game.lives];
+    let progress = game.progress;
+    let lives = "";
+    for (let i = 0; i < 6; ++i) {
+        if (i < game.lives) {
+            lives += "❤️";
+        } else {
+            lives += "🖤";
+        }
+    }
+    let misses = "Misses: ";
+    for (let i = 0; i < game.misses.length; ++i) {
+        misses += (game.misses[i] + " ");
+    }
+
+    const screen = figureStep.replace("w", progress)
+        .replace("l", lives)
+        .replace("m", misses);
+    
     if (gameMessage) {
-        await gameMessage.edit(`${game.progress} | Lives: ${game.lives} | Status: ${game.status}`);
+        await gameMessage.edit(screen, { code: true });
     } else {
-        return await channel.send(`${game.progress} | Lives: ${game.lives} | Status: ${game.status}`);
+        return await channel.send(screen, { code: true });
     }
 }
 
@@ -122,11 +203,11 @@ async function startGame(channel, gameType) {
 async function runGame(channel, game, players) {
     await channel.send("All ready, starting the game!");
     const gameMessage = await showProgress(channel, game);
-    const filter = ((m) => {
-        const a = players.find((p) => (p.id == m.author.id));
-        const b = m.content.match(/^[A-Za-zÀ-ú]{1}$/);
-        return (a && b && b.length == 1);
-    });
+    const filter = ((m) =>
+        players.find((p) => (p.id == m.author.id))
+        // const b = m.content.match(/^[A-Za-zÀ-ú]{1}$/);
+        // return (a && b && b.length == 1);
+    );
 
     const collector = channel.createMessageCollector(filter, { time: 900000 }); // max of 15 minutes per game
 
@@ -134,9 +215,17 @@ async function runGame(channel, game, players) {
         collector.on('collect', async (m) => {
             const c = m.content.toLowerCase();
             m.delete();
-            game.guess(c);
+            if (m.content.match(/^[A-Za-zÀ-ú]{2,}$/)) {
+                if (game.guessAll(c) == false) {
+                    players.splice(players.find(p => m.author.id == p.id), 1);
+                }
+            } else if (m.content.match(/^[A-Za-zÀ-ú]{1}$/)) {
+                game.guess(c);
+            } else {
+                return;
+            }
             await showProgress(channel, game, gameMessage);
-            if (game.status !== "in progress") {
+            if (game.status !== "in progress" || players.length < 1) {
                 collector.stop();
             }
         });

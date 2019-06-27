@@ -31,7 +31,9 @@ class hangman {
                 }
             }
         } else {
-            this.misses.push(c);
+            if (!this.misses.includes(c)) {
+                this.misses.push(c);
+            }
             --this.lives;
         }
 
@@ -41,6 +43,16 @@ class hangman {
             this.status = "won";
         }
         return { status: this.status, progress: this.progress, misses: this.misses, lifes: this.lives };
+    }
+
+    guessAll(word) {
+        if (this.word === word) {
+            this.progress = this.word;
+            this.status = "won";
+        } else {
+            --this.lives;
+        }
+        return this.status === "won";
     }
 }
 
