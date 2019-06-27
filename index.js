@@ -65,7 +65,15 @@ const figure = [`
 `];
 
 
-const helpEmbed = new Discord.RichEmbed();
+const helpEmbed = new Discord.RichEmbed()
+    .addField("Start new game", "`" + prefix + " start [custom | random]`. By default is custom. Custom means one"
+        + " of the players choose the word. With random, the word is choose randomly.")
+    .addField("Joining the game", "Just react with the 📒 emoji or send a message with \"join\".")
+    .addField("Playing the game", "When the game has started and a hangman shows up in the text channel, you have"
+        + " to guess the word. If you send one character, you are asking if the character is in the word. If you"
+        + " send more than one character (a word) you are guessing the whole word and if you fail, you are eliminated"
+        + " from the game.")
+    .setColor("#99AAB5");
 
 const runningGames = new Set();
 
@@ -310,7 +318,7 @@ client.on('message', async (msg) => {
         switch (args[0]) {
             case "start":
                 if (!runningGames.has(msg.guild)) {
-                    let gameType = "random";
+                    let gameType = "custom";
                     if (args[1]) switch (args[1]) {
                         case "random":
                             gameType = "random";
@@ -349,6 +357,7 @@ client.on('message', async (msg) => {
 
 client.on('ready', () => {
     client.user.setActivity(prefix + " help");
+    helpEmbed.setAuthor("The Hanging Wumpus Help", client.user.avatarURL, "https://github.com/Zheoni/TheHangingWumpus");
 });
 
 client.on('error', (err) => console.error(err));
