@@ -5,8 +5,10 @@ A bot for the Discord Hack Week
 ## About
 
 This is a discord bot that allows you to play a hangman game
-in discord. I code this in days for the mentioned discord
+in discord. I code this in two days for the mentioned discord
 hack week, so... it's pretty rushed.
+
+This is a server to test the bot: https://discord.gg/Wu8xugv
 
 ## Usage
 
