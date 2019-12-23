@@ -206,10 +206,11 @@ async function showProgress(channel, game, gameMessage, gameOver) {
     if (gameOver) {
         if (game.status === "won") {
             embed.setColor("#00CC00");
+            screen = screen.replace(/gameStatus/, "You won");
         } else {
             embed.setColor("#E50000");
+            screen = screen.replace(/gameStatus/, "Game over");
         }
-        screen = screen.replace(/gameStatus/, "Game over");
     } else {
         screen = screen.replace(/gameStatus/, " ");
         embed.setColor("#FFD700");
